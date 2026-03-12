@@ -1,0 +1,129 @@
+package dogPK;
+
+import java.util.Random;
+import java.util.Scanner;
+
+public class Game {
+    private Scanner scanner;
+    private Random random;
+
+    public Game(Scanner scanner) {
+        this.scanner = scanner;
+        this.random = new Random();
+    }
+
+    public void run(Dog dog1, Dog dog2) {
+        System.out.println("===== 小狗PK游戏开始 =====");
+        System.out.println(dog1.getName() + " (" + getProfessionName(dog1.getProfession()) + ") vs " + dog2.getName() + " (" + getProfessionName(dog2.getProfession()) + ")");
+        System.out.println("初始血量：双方均为100");
+        System.out.println("=========================\n");
+
+        int round = 1;
+        while (dog1.isAlive() && dog2.isAlive()) {
+            System.out.println("===== 第" + round + "回合 =====");
+            // 回合前置：处理中毒、更新状态
+            dog1.endTurn();
+            dog2.endTurn();
+
+            // 攻击方1行动
+            if (dog1.isAlive()) {
+                performAttack(dog1, dog2);
+            }
+            if (!dog2.isAlive()) break;
+
+            // 攻击方2行动
+            if (dog2.isAlive()) {
+                performAttack(dog2, dog1);
+            }
+            if (!dog1.isAlive()) break;
+
+            round++;
+        }
+
+        // 游戏结束
+        System.out.println("\n===== 游戏结束 =====");
+        Dog winner = dog1.isAlive() ? dog1 : dog2;
+        Dog loser = dog1.isAlive() ? dog2 : dog1;
+        System.out.println("胜利者: " + winner.getName() + " (" + getProfessionName(winner.getProfession()) + ")，剩余血量: " + winner.getHealth());
+        System.out.println("失败者: " + loser.getName() + " (" + getProfessionName(loser.getProfession()) + ")，剩余血量: " + loser.getHealth());
+    }
+
+    // 执行一次攻击（attacker攻击defender）
+    private void performAttack(Dog attacker, Dog defender) {
+        if (!attacker.canAttack()) {
+            System.out.println(attacker.getName() + " 无法攻击，本轮跳过");
+            attacker.setCanAttack(true); // 重置攻击状态
+            return;
+        }
+
+        // 显示可用技能
+        System.out.println("\n" + attacker.getName() + " 行动：");
+        System.out.println("可用技能: " + String.join(", ", attacker.getSkills()));
+        System.out.print("请输入攻击方式（普通 / 技能名 / 普通+技能名，空格分隔）：");
+        String input = scanner.nextLine().trim();
+        String[] attackActions = input.split("\\s+"); // 按任意空格分割
+
+        int normalDamage = 0; // 普通攻击伤害
+        int skillTotalDamage = 0; // 所有技能总伤害
+        boolean useVampire = false; // 是否使用了吸血技能
+        int vampireStealHp = 0; // 吸血量
+
+        // 解析攻击指令
+        for (String action : attackActions) {
+            if (action.equals("普通")) {
+                normalDamage = attacker.getNormalAttackDamage();
+            } else if (attacker.getSkills().contains(action)) {
+                if (action.equals("躲闪")) {
+                    // 刺客使用躲闪：标记状态（在被攻击时生效）
+                    attacker.performSkill(action, defender);
+                } else {
+                    // 执行其他技能，获取技能基础伤害
+                    int skillDamage = attacker.performSkill(action, defender);
+                    skillTotalDamage += skillDamage;
+
+                    // 单独处理吸血（因为需要直接转移血量）
+                    if (action.equals("吸血")) {
+                        useVampire = true;
+                        vampireStealHp = skillDamage;
+                    }
+                }
+            } else {
+                System.out.println("无效指令：" + action + "，已忽略");
+            }
+        }
+
+        // 计算总攻击伤害（普通+技能）
+        int totalAttackDamage = normalDamage + skillTotalDamage;
+        System.out.println("\n攻击详情：");
+        System.out.println("普通攻击伤害：" + normalDamage);
+        System.out.println("技能总伤害：" + skillTotalDamage);
+        System.out.println("攻击总伤害（未减伤）：" + totalAttackDamage);
+
+        // 处理吸血效果（优先于防御减伤）
+        if (useVampire) {
+            attacker.applyVampire(defender, vampireStealHp);
+            // 吸血已经直接修改血量，需从总伤害中扣除（避免重复计算）
+            totalAttackDamage -= vampireStealHp;
+        }
+
+        // 计算防御者实际受到的伤害
+        int actualDamage = defender.calculateActualDamage(totalAttackDamage);
+        defender.takeDamage(actualDamage);
+
+        // 输出伤害结算
+        System.out.println("防御减伤（" + defender.getDefense() + "*50%）：" + (defender.getDefense() * 0.5));
+        System.out.println(defender.getName() + " 实际受到伤害：" + actualDamage);
+        System.out.println(defender.getName() + " 剩余血量：" + defender.getHealth());
+        System.out.println(attacker.getName() + " 剩余血量：" + attacker.getHealth());
+    }
+
+    // 转换职业名称为中文
+    private String getProfessionName(Profession profession) {
+        switch (profession) {
+            case MAGE: return "法师";
+            case WARRIOR: return "战士";
+            case ASSASSIN: return "刺客";
+            default: return "未知";
+        }
+    }
+}
